@@ -91,9 +91,8 @@ test('close after websocket close', async (t) => {
   once(server, 'close')
 })
 
-// This tests the WebSocketSafetyTransform, but currently this test does not
-// fail if I remove WebSocketSafetyTransform. When experimenting with this I did
-// get errors, which is why I added that, I just can't replicate now in a test.
+// This tests the WebSocketSafetyTransform, which stops data being written to a
+// closing websocket connection.
 test('closing websocket during replication', async (t) => {
   const core1 = await createCore()
   const core2 = await createCore(core1.key)
@@ -108,6 +107,10 @@ test('closing websocket during replication', async (t) => {
     await once(server, 'connection')
   )
   const core2Replication = core2.replicate(false)
+  // Without the WebSocketSafetyTransform, the replication stream will emit a
+  // error "WebSocket is not open: readyState 2 (CLOSING)"
+  core1Replication.on('error', t.fail)
+  core2Replication.on('error', t.fail)
   new WebSocketHypercoreReplicator(serverWs, core2Replication)
   await core2.update({ wait: true })
   core2.download({ start: 0, end: core1.length })

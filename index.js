@@ -29,7 +29,7 @@ export default class WebSocketHypercoreReplicator extends TypedEmitter {
 
     /** @param {Error} error */
     const onError = (error) => {
-      /* c8 ignore next */
+      /* c8 ignore next - swallow errors if manually closed */
       this.#protocolStream.destroy(this.#closed ? undefined : error)
     }
 
