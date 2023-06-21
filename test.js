@@ -117,8 +117,14 @@ test('closing websocket during replication', async (t) => {
   new WebSocketHypercoreReplicator(serverWs, core2Replication)
   await core2.update({ wait: true })
   core2.download({ start: 0, end: core1.length })
-  await wshr.close()
-  await once(serverWs, 'close')
+  await Promise.all([
+    wshr.close().then(() => {
+      t.pass('closed replicator on the client')
+    }),
+    once(serverWs, 'close').then(() => {
+      t.pass('server websocket was closed')
+    }),
+  ])
   t.ok(core1Replication.destroyed, '1st replication stream is destroyed')
   t.ok(core2Replication.destroyed, '2nd replication stream is destroyed')
   server.close()
