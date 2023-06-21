@@ -131,6 +131,74 @@ test('closing websocket during replication', async (t) => {
   await once(server, 'close')
 })
 
+test('ending client replication stream gracefully closes the websockets', async (t) => {
+  const core1 = await createCore()
+  const core2 = await createCore(core1.key)
+
+  const { server, port } = await createServer()
+  const clientWs = new WebSocket('ws://localhost:' + port)
+  const core1Replication = core1.replicate(true)
+  new WebSocketHypercoreReplicator(clientWs, core1Replication)
+
+  const [serverWs] = /** @type {[import('ws').WebSocket]} */ (
+    await once(server, 'connection')
+  )
+  const core2Replication = core2.replicate(false)
+  new WebSocketHypercoreReplicator(serverWs, core2Replication)
+  await core2.update({ wait: true })
+  t.equal(core2.length, core1.length, 'length is updated')
+  t.equal(core2.peers.length, 1, 'is connected to peer')
+
+  core1Replication.end()
+
+  await Promise.all([
+    once(serverWs, 'close').then(([code]) => {
+      t.equal(code, 1005, 'server websocket closed with status 1005')
+    }),
+    once(clientWs, 'close').then(([code]) => {
+      t.equal(code, 1005, 'client websocket closed with status 1005')
+    }),
+  ])
+  t.ok(core1Replication.destroyed, '1st replication stream is destroyed')
+  t.ok(core2Replication.destroyed, '2nd replication stream is destroyed')
+  server.close()
+  await once(server, 'close')
+})
+
+test('ending server replication stream gracefully closes the websockets', async (t) => {
+  const core1 = await createCore()
+  const core2 = await createCore(core1.key)
+
+  const { server, port } = await createServer()
+  const clientWs = new WebSocket('ws://localhost:' + port)
+  const core1Replication = core1.replicate(true)
+  new WebSocketHypercoreReplicator(clientWs, core1Replication)
+
+  const [serverWs] = /** @type {[import('ws').WebSocket]} */ (
+    await once(server, 'connection')
+  )
+  const core2Replication = core2.replicate(false)
+  new WebSocketHypercoreReplicator(serverWs, core2Replication)
+  await core2.update({ wait: true })
+  t.equal(core2.length, core1.length, 'length is updated')
+  t.equal(core2.peers.length, 1, 'is connected to peer')
+
+  core2Replication.end()
+
+  await Promise.all([
+    once(serverWs, 'close').then(([code]) => {
+      t.equal(code, 1005, 'server websocket closed with status 1005')
+    }),
+    once(clientWs, 'close').then(([code]) => {
+      t.equal(code, 1005, 'client websocket closed with status 1005')
+    }),
+  ])
+  t.ok(core1Replication.destroyed, '1st replication stream is destroyed')
+  t.ok(core2Replication.destroyed, '2nd replication stream is destroyed')
+  server.close()
+  await once(server, 'close')
+})
+
 /** @param {Buffer} [key] */
 async function createCore(key) {
   const core = new Hypercore(RAM, key)
