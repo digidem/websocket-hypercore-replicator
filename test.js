@@ -30,8 +30,10 @@ test('replicate over websocket', async (t) => {
   t.deepEqual(await core2.get(2), Buffer.from('c'), 'data is replicated')
 
   await Promise.all([wshr1.close(), wshr2.close()])
+  t.ok(core1Replication.destroyed, '1st replication stream is destroyed')
+  t.ok(core2Replication.destroyed, '2nd replication stream is destroyed')
   server.close()
-  once(server, 'close')
+  await once(server, 'close')
 })
 
 test('websocket error before replication', async (t) => {
@@ -61,7 +63,8 @@ test('graceful end before websocket has connected', async (t) => {
   await wshr.close()
   t.equal(ws.readyState, ws.CLOSED, 'Websocket is closed')
   t.ok(closed, 'replication stream is also closed')
-  await server.close()
+  server.close()
+  await once(server, 'close')
 })
 
 test('close after websocket close', async (t) => {
@@ -85,10 +88,10 @@ test('close after websocket close', async (t) => {
   await once(clientWs, 'close')
 
   await Promise.all([wshr1.close(), wshr2.close()])
-  // This tests the code that checks the websocket is closed in the close() function.
-  t.pass('closed replication')
+  t.ok(core1Replication.destroyed, '1st replication stream is destroyed')
+  t.ok(core2Replication.destroyed, '2nd replication stream is destroyed')
   server.close()
-  once(server, 'close')
+  await once(server, 'close')
 })
 
 // This tests the WebSocketSafetyTransform, which stops data being written to a
@@ -101,7 +104,7 @@ test('closing websocket during replication', async (t) => {
   const { server, port } = await createServer()
   const clientWs = new WebSocket('ws://localhost:' + port)
   const core1Replication = core1.replicate(true)
-  new WebSocketHypercoreReplicator(clientWs, core1Replication)
+  const wshr = new WebSocketHypercoreReplicator(clientWs, core1Replication)
 
   const [serverWs] = /** @type {[import('ws').WebSocket]} */ (
     await once(server, 'connection')
@@ -114,11 +117,12 @@ test('closing websocket during replication', async (t) => {
   new WebSocketHypercoreReplicator(serverWs, core2Replication)
   await core2.update({ wait: true })
   core2.download({ start: 0, end: core1.length })
-  clientWs.close()
+  await wshr.close()
   await once(serverWs, 'close')
-  t.pass('closed replication')
+  t.ok(core1Replication.destroyed, '1st replication stream is destroyed')
+  t.ok(core2Replication.destroyed, '2nd replication stream is destroyed')
   server.close()
-  once(server, 'close')
+  await once(server, 'close')
 })
 
 /** @param {Buffer} [key] */
