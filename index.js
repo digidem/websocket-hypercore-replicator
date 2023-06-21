@@ -65,18 +65,22 @@ export default class WebSocketHypercoreReplicator extends TypedEmitter {
     const ws = this.#ws
     const protocolStream = this.#protocolStream
 
-    if (ws.readyState === ws.CONNECTING) {
+    if (ws.readyState === ws.CLOSED) {
+      if (protocolStream.destroyed) return
+      /* c8 ignore next 4 */
+      // Can't think of a test scenario that would result in the websocket
+      // closing without the protocol stream being destroyed, but just in case
+      protocolStream.destroy()
+      return once(protocolStream, 'close')
+    } else if (ws.readyState === ws.CONNECTING) {
       // Trying to close before it has opened creates hard to catch errors
       await once(ws, 'open')
-      ws.close()
-      // The protocolStream has not been piped anywhere at this stage, so it is
-      // safe to destroy without waiting for 'drain' or calling 'end()'
+      // The protocolStream has not been piped anywhere at this stage, so need
+      // to destroy it manually
       protocolStream.destroy()
-    } else {
-      await protocolStream.opened
-      protocolStream.end()
     }
-    if (ws.readyState === ws.CLOSED) return
+    ws.close()
+
     await Promise.all([once(ws, 'close'), once(protocolStream, 'close')])
   }
 }
